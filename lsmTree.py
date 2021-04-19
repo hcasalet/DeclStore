@@ -5,39 +5,25 @@ from os import path
 import pickle
 from typing import Final
 
-# Design of the LSM:
-#  1. Key range 1-10000
-#  2. Levels: memory -> level 0 -> level 1 (final row level) -> level 2 (final column level)
-#  3. Memory buffer size 2*100*data_unit. Alternating between the two. When one of them is full, switch to use the
-#     other but the one that is full goes into compaction to level 0.
-#  4. Level 0 has 1*10 pages each with the capacity of 100*data_unit. So they hold keys in the range of:
-#     [1, 1000],
-#     [1001, 2000],
-#     [2001, 3000],
-#     ......
-#     [8001, 9000],
-#     [9001, 10000]
-#  5. Level 1 has 10*10 pages, each with the capacity of 100*data_unit. Whenever memory and level 0 merge, if the merge
-#     generates more than what a level 0 page can hold, it will continue to compact into level 1 and level 2. The range
-#     of keys that they hold are:
-#     [1, 100],
-#     [101, 200],
-#     [201, 300],
-#     ......,
-#     [1001, 1100],
-#     ......,
-#     [9901, 10000].
-#  6. Level 2 has 10*10 pages, and stores data in columnar format. each with the capacity of 1field*400rows.
-#     The range of data contained in those pages are:
-#     [col1, 1, 400],
-#     [col2, 1, 400],
-#     [col3, 1, 400],
-#     [col4, 1, 400],
-#     .......,
-#     [col1, 9601, 10000],
-#     [col2, 9601, 10000],
-#     [col3, 9601, 10000],
-#     [col4, 9601, 10000]
+# Configuration of the LSM:
+#  1. Key range [l, h], number of columns (fields) in the table (object) is n.
+#  2. With the root being the memory buffer, the LSM tree has another v levels going from level 0 to level v-1, with
+#     a fan-out rate of f from level i to i+1 , and pow(2, i) column groups at level i.
+#  3. The compaction from the memory buffer to level 0 is configured to be triggered when the key size in memory reaches
+#     (h-l+1)/pow(f, v-1). In the process of Compaction from memory to level 0
+#     will be triggered. In addition to the compaction from memory buffer to level 0, compaction always goes from a
+#     parent page at level i to all its children pages at level i+1, when that parent page at level i gets full from
+#     the compaction coming from its own parent at level i-1. So, in the process of compacting from memory buffer to
+#     level 0, if any page in level 0 gets full, it triggers compaction from level 0 to level 1. This process continues
+#     until level v-1 is reached, where data with any key value can be stored, and no more downward compaction is
+#     needed.
+#  5. Level i has pow(f, i+1) pages, and a column group number pow(2, i). Let p_j denote the jth page in level i, with
+#     j being in the range of [1, pow(f, i+1)]. The key range for each page in level i will be:
+#     [((p_j-1)*h + (pow(f, i+1) - (p_j-1))*l + (p_j-1)) / pow(f, i+1) * pow(2, i),
+#      (p_j*h + (pow(f, i+1) - p)*l + p) / pow(f, i+1) * pow(2, i))
+#  6. The page size at level i is (h-l+1)/pow(f, i+1)*pow(2, i)*Sigma(s_g), where g is the column group number and s_g
+#     is the size of column group g. g ranges from 1 to pow(2, i), and fields for group g range from g*n/pow(2, i) to
+#     (g+1)*n/pow(2, i)-1).
 
 
 class LsmTree:
@@ -45,9 +31,13 @@ class LsmTree:
     NUM_OF_COLS: Final = 4
     PAGE_GROWING_RATE: Final = 10
 
-    def __init__(self, cap, minkey, maxkey):
-        self.min_key = minkey
-        self.max_key = maxkey
+    def __init__(self, l, h, n, v, f):
+        self.key_low_bound = l
+        self.key_high_bound = h
+        self.num_of_cols = n
+        self.total_levels = v
+        self.fan_out = f
+
         self.buffer = {}
         self.buffer_size = 0
         self.buffer_capacity = cap

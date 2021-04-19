@@ -12,7 +12,7 @@ def print_table(data):
 
 # Press the green button in the gutter to run the script.
 if __name__ == '__main__':
-    lsm = LsmTree(20, 1, 1000)
+    lsm = LsmTree(1, 10240, 256, 4, 8)
     obj = value('T1', 1, '11111111', '12121212', '13131313', '14141414')
     lsm.write(obj)
 
@@ -49,8 +49,8 @@ if __name__ == '__main__':
     print_table(lsm.read(['col1', 'col2'], 9))
 
     print('col2 = ' + lsm.read(['col2'], 9))
-    print('col1 = ' + lsm.read(['col1'], 9))
-    print('col3 = ' + lsm.read(['col3'], 9))
+    #print('col1 = ' + lsm.read(['col1'], 9))
+    #print('col3 = ' + lsm.read(['col3'], 9))
 
 ''' 
     obj = value('T1', 68, '24242424', '36363636', '48484848', '60606060')
