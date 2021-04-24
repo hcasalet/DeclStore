@@ -4,6 +4,7 @@ import os.path
 from os import path
 import pickle
 from typing import Final
+from membuf import MemBuf
 
 # Configuration of the LSM:
 #  1. Key range [l, h], number of columns (fields) in the table (object) is n.
@@ -31,12 +32,24 @@ class LsmTree:
     NUM_OF_COLS: Final = 4
     PAGE_GROWING_RATE: Final = 10
 
-    def __init__(self, l, h, n, v, f):
-        self.key_low_bound = l
-        self.key_high_bound = h
-        self.num_of_cols = n
-        self.total_levels = v
-        self.fan_out = f
+    def __init__(self, items, num_cols, objs_per_page):
+        # number of levels is log[num_cols], starting at level 0 and thus +1
+        self.levels = math.floor(math.log(num_cols, 2)) + 1
+
+        # fan out rate = log[(items/objs_per_page) ** (1/levels)]
+        self.fan_out = math.floor(math.log(math.ceil(math.pow(items/objs_per_page, (1/self.levels))), 2))
+
+        # key range low bound always starts with 1, and high bound is 2*items
+        self.key_low_bound = 1
+        self.key_high_bound = 2 * items
+
+        # number of columns
+        self.num_of_cols = num_cols
+
+        # root node
+        self.root = MemBuf()
+
+
 
         self.buffer = {}
         self.buffer_size = 0
