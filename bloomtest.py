@@ -1,6 +1,5 @@
 from bloomfilter import BloomFilter
 from random import shuffle
-import pickle
 
 n = 20  # no of items to add
 p = 0.05  # false positive probability
@@ -32,7 +31,9 @@ def write_bloom_filter():
 
 
 def read_bloom_filter():
-    bloomf = BloomFilter.read_bloom_filter_from_file(filename)
+    bloomf, length = BloomFilter.read_bloom_filter_from_file(filename)
+
+    print("length of bloom filter: " + str(length))
 
     shuffle(word_present)
     shuffle(word_absent)

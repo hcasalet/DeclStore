@@ -53,6 +53,9 @@ class BloomFilter(object):
                 return False
         return True
 
+    def clear(self):
+        self.bit_array.setall(0)
+
     def prepare_bloom_filter_to_write(self):
         """
         With first 4 bytes as the length comes the serialized bloom filter
@@ -70,14 +73,13 @@ class BloomFilter(object):
         """
         Given a file, builds the bloom filter in memory
         :param filename:
-        :return: Bloom Filter object instance
+        :return: Bloom Filter object instance, length of bloom filter plus length
         """
         with open(filename, "rb") as infile:
-            length = int.from_bytes(infile.read(4), 'big')
-            infile.seek(4)
-            bf = infile.read(length)
-            bloom = pickle.loads(bf)
-        return bloom
+            indata = infile.read(1024)
+        length = int.from_bytes(indata[:4], 'big')
+        bloom = pickle.loads(indata[4:(4+length)])
+        return bloom, 4+length
 
     @classmethod
     def get_size(cls, n, p):

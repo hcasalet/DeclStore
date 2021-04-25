@@ -28,56 +28,30 @@ from membuf import MemBuf
 
 
 class LsmTree:
-    PAGE_SIZE: Final = 10
-    NUM_OF_COLS: Final = 4
-    PAGE_GROWING_RATE: Final = 10
-
-    def __init__(self, items, num_cols, objs_per_page):
+    def __init__(self, items, num_cols, objs_per_page, file_root, fp_prob):
         # number of levels is log[num_cols], starting at level 0 and thus +1
         self.levels = math.floor(math.log(num_cols, 2)) + 1
 
         # fan out rate = log[(items/objs_per_page) ** (1/levels)]
-        self.fan_out = math.floor(math.log(math.ceil(math.pow(items/objs_per_page, (1/self.levels))), 2))
-
-        # key range low bound always starts with 1, and high bound is 2*items
-        self.key_low_bound = 1
-        self.key_high_bound = 2 * items
+        self.fan_out = math.floor(math.ceil(math.pow(items / objs_per_page, (1 / self.levels))))
 
         # number of columns
         self.num_of_cols = num_cols
 
+        # per node data capacity
+        self.node_storage_capacity = math.ceil(items * 2 / pow(self.fan_out, self.levels))
+
         # root node
-        self.root = MemBuf()
+        self.root = MemBuf(2*items, num_cols, self.levels, self.fan_out, self.node_storage_capacity, file_root, fp_prob)
 
+    def read(self, read_key, col_pos):
+        return self.root.read(read_key, col_pos)
 
+    def write(self, write_key, write_value):
+        self.root.write(write_key, write_value)
 
-        self.buffer = {}
-        self.buffer_size = 0
-        self.buffer_capacity = cap
-        self.fileroot = '/Users/hollycasaletto/PycharmProjects/DeclStore/lsm'
-        self.level_0_size = 0
-        self.level_1_size = 0
-        self.level_0_pages = [{}, {}, {}, {}, {}, {}, {}, {}, {}, {}]
-        self.level_1_pages = [{}, {}, {}, {}, {}, {}, {}, {}, {}, {}]
-        self.level_2_pages = [{}, {}, {}, {}]
-
-        self.level_0_page_key_range_cap = math.floor((self.max_key-self.min_key+1)/self.PAGE_GROWING_RATE)
-        self.level_0_page_key_range_name_map = {}
-        for i in range(self.PAGE_GROWING_RATE):
-            self.level_0_page_key_range_name_map[i] = str(i*self.level_0_page_key_range_cap+1) + '-' + \
-                                                      str((i+1)*self.level_0_page_key_range_cap)
-        self.level_1_page_key_range_cap = \
-            math.floor((self.max_key-self.min_key+1)/math.pow(self.PAGE_GROWING_RATE, 2))
-        self.level_1_page_key_range_name_map = {}
-        for i in range(math.floor(math.pow(self.PAGE_GROWING_RATE, 2))):
-            self.level_1_page_key_range_name_map[i] = str(i*self.level_1_page_key_range_cap+1) + \
-                                                 '-' + \
-                                                 str((i+1)*self.level_1_page_key_range_cap)
-        self.level_2_col_name_map = {}
-        for i in range(self.NUM_OF_COLS):
-            self.level_2_col_name_map[i] = 'col'+str(i+1)
-
-    def read(self, read_cols, key):
+'''
+    def read2(self, read_cols, key):
         read_path = self.fileroot
 
         # ToDo: Need to check memory buffer and level_0 first
@@ -206,3 +180,4 @@ class LsmTree:
                 pickle.dump(self.level_2_pages[i], outfile, protocol=pickle.HIGHEST_PROTOCOL)
             outfile.close()
             self.level_2_pages[i].clear()
+'''
