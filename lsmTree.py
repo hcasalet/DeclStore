@@ -1,48 +1,76 @@
 import math
-import os
-import os.path
-from os import path
-import pickle
-from typing import Final
 from membuf import MemBuf
+from node import Node
 
-# Configuration of the LSM:
-#  1. Key range [l, h], number of columns (fields) in the table (object) is n.
-#  2. With the root being the memory buffer, the LSM tree has another v levels going from level 0 to level v-1, with
-#     a fan-out rate of f from level i to i+1 , and pow(2, i) column groups at level i.
-#  3. The compaction from the memory buffer to level 0 is configured to be triggered when the key size in memory reaches
-#     (h-l+1)/pow(f, v-1). In the process of Compaction from memory to level 0
-#     will be triggered. In addition to the compaction from memory buffer to level 0, compaction always goes from a
-#     parent page at level i to all its children pages at level i+1, when that parent page at level i gets full from
-#     the compaction coming from its own parent at level i-1. So, in the process of compacting from memory buffer to
-#     level 0, if any page in level 0 gets full, it triggers compaction from level 0 to level 1. This process continues
-#     until level v-1 is reached, where data with any key value can be stored, and no more downward compaction is
-#     needed.
-#  5. Level i has pow(f, i+1) pages, and a column group number pow(2, i). Let p_j denote the jth page in level i, with
-#     j being in the range of [1, pow(f, i+1)]. The key range for each page in level i will be:
-#     [((p_j-1)*h + (pow(f, i+1) - (p_j-1))*l + (p_j-1)) / pow(f, i+1) * pow(2, i),
-#      (p_j*h + (pow(f, i+1) - p)*l + p) / pow(f, i+1) * pow(2, i))
-#  6. The page size at level i is (h-l+1)/pow(f, i+1)*pow(2, i)*Sigma(s_g), where g is the column group number and s_g
-#     is the size of column group g. g ranges from 1 to pow(2, i), and fields for group g range from g*n/pow(2, i) to
-#     (g+1)*n/pow(2, i)-1).
+'''
+                                 ----- Design of the LSM Tree -----
+                                 
+                                          _______________
+                                          | MemoryBuffer|
+                                          ---------------
+                                                | X10
+                 ----------------------------------------------------------------
+                 |              |               |             ....              |
+  Level 0:      ◉◉◉            ◉◉◉             ◉◉◉                             ◉◉◉     (1% of data)
+                                | X10
+                 --------------------------------------------------------    
+                 |              |               |        .....          |
+  Level 1:      ◉◉◉            ◉◉◉             ◉◉◉                     ◉◉◉             (10% of data, row-based)
+                                                | XAdaptive
+                          ----------------------------------------------------------
+                          |   |          |            | | |            |      ......
+  Level 2:                ◉  ◉◉         ◉◉◉           ◉ ◉ ◉           ◉◉◉              (100% capacity)
+  
+  
+  1. Tree root is the memory buffer, and three levels. Level 0 and level 1 are row based, and level 2 is column based.
+  2. Key range [keyLow, keyHigh], with a fan-out rate of 10 from the memory buffer to level 0, and each level i to 
+     level i+1. With this structure, the maximum data capacity of level 0 is 1% of the data, and level 1 10%, level 2
+     100%. Every child node holds 10% of its parent node's key range. There are no restrictions to the size of the 
+     memory buffer.
+  3. Level 0 and level 1 hold all columns in one entire row together, while level 2 adaptively have pieces (subset) of 
+     columns depending on the incoming query workload. (column cracking)
+  4. A level 1 node has the information about the column pieces among its children in its 1st page. 
+  5. The compaction from every level including the memory buffer to its children level is triggered when the node is
+     full, while a receiving child node could in turn become full during the compaction and start a downward compaction 
+     to the child node's children.
+
+'''
 
 
 class LsmTree:
-    def __init__(self, items, num_cols, objs_per_page, file_root, fp_prob):
+    def __init__(self, items, levels, fan_out, file_root, fp_prob):
         # number of levels is log[num_cols], starting at level 0 and thus +1
-        self.levels = math.floor(math.log(num_cols, 2)) + 1
+        self.levels = levels
 
-        # fan out rate = log[(items/objs_per_page) ** (1/levels)]
-        self.fan_out = math.floor(math.ceil(math.pow(items / objs_per_page, (1 / self.levels))))
+        # key low bound
+        self.key_low_bound = 0
 
-        # number of columns
-        self.num_of_cols = num_cols
+        # key high bound
+        self.key_high_bound = items - 1
+
+        # fan out rate
+        self.fan_out = fan_out
 
         # per node data capacity
-        self.node_storage_capacity = math.ceil(items * 2 / pow(self.fan_out, self.levels))
+        self.node_storage_capacity = math.ceil(items / pow(self.fan_out, self.levels))
 
         # root node
-        self.root = MemBuf(2*items, num_cols, self.levels, self.fan_out, self.node_storage_capacity, file_root, fp_prob)
+        self.root = self.build_tree(items, file_root, fp_prob)
+
+    def build_tree(self, items, file_root, fp_prob):
+        children = []
+        child_cap = math.ceil(items/self.fan_out)
+        child_range_low_bound = 1
+        child_range_high_bound = child_cap
+
+        for child in range(self.fan_out):
+            node = Node(child_range_low_bound, child_range_high_bound, self.levels,
+                        self.node_storage_capacity, 0, child + 1, 1, self.fan_out, file_root, fp_prob)
+            children.append(node)
+            child_range_low_bound = child_range_high_bound + 1
+            child_range_high_bound = child_range_low_bound + child_cap - 1
+
+        return MemBuf(self.node_storage_capacity, math.ceil(items/self.fan_out), children)
 
     def read(self, read_key, col_pos):
         return self.root.read(read_key, col_pos)
@@ -50,134 +78,3 @@ class LsmTree:
     def write(self, write_key, write_value):
         self.root.write(write_key, write_value)
 
-'''
-    def read2(self, read_cols, key):
-        read_path = self.fileroot
-
-        # ToDo: Need to check memory buffer and level_0 first
-
-        if len(read_cols) == 1:
-            range_factor = math.floor(key/(self.PAGE_SIZE*self.NUM_OF_COLS))
-            read_path += '/level_2_' + read_cols[0] + '_' + str(range_factor*self.PAGE_SIZE*self.NUM_OF_COLS+1) + \
-                         '-' + str((range_factor+1)*self.PAGE_SIZE*self.NUM_OF_COLS) + '.pickle'
-            with open(read_path, 'rb') as infile:
-                data = pickle.load(infile)
-            infile.close()
-            return data[key]
-        else:
-            range_factor = math.floor(key/self.PAGE_SIZE)
-            read_path += '/level_1_' + str(range_factor*self.PAGE_SIZE+1) + '-' + \
-                         str((range_factor+1)*self.PAGE_SIZE) + '.pickle'
-            with open(read_path, 'rb') as infile:
-                data = pickle.load(infile)
-            infile.close()
-            return(data[key])
-
-    def write(self, val):
-        if self.buffer_size < self.buffer_capacity:
-            if val.primarykey not in self.buffer.keys():
-                self.buffer[val.primarykey] = val
-                self.buffer_size += 1
-
-            if self.buffer_size >= self.buffer_capacity / 2:
-                write_out = {}
-                for key in self.buffer:
-                    write_out[key] = self.buffer[key]
-                self.buffer.clear()
-                self.buffer_size = 0
-                self.compact_buffer(write_out)
-        else:
-            print("Error: buffer is full")
-
-    def compact_buffer(self, write_out):
-        files_read = [False]*self.PAGE_GROWING_RATE*1
-        for key in write_out:
-            file_no = math.floor(key*self.PAGE_GROWING_RATE/(self.max_key-self.min_key+1))
-            if not files_read[file_no]:
-                if path.exists(self.fileroot+"/level_0_"+str(self.level_0_page_key_range_name_map[file_no])+".pickle"):
-                    with open(self.fileroot+"/level_0_"+str(self.level_0_page_key_range_name_map[file_no])+".pickle", 'rb') as infile:
-                        self.level_0_pages[file_no] = pickle.load(infile)
-                    infile.close()
-                files_read[file_no] = True
-
-            if len(self.level_0_pages[file_no])+1 >= self.PAGE_SIZE:
-                level_0_file = dict(self.level_0_pages[file_no])
-                self.compact_level_0(level_0_file, file_no)
-                self.level_0_pages[file_no].clear()
-            self.level_0_pages[file_no][key] = write_out[key]
-
-        for i in range(self.PAGE_GROWING_RATE):
-            if self.level_0_pages[i]:
-                if path.exists(self.fileroot+"/level_0_"+str(self.level_0_page_key_range_name_map[i])+".pickle"):
-                    os.rename(self.fileroot + "/level_0_" + str(self.level_0_page_key_range_name_map[i]) + ".pickle",
-                              self.fileroot + "/level_0_" + str(self.level_0_page_key_range_name_map[i]) + ".pickle.bak")
-                with open(self.fileroot+"/level_0_"+str(self.level_0_page_key_range_name_map[i])+".pickle", 'wb') as outfile:
-                    pickle.dump(self.level_0_pages[i], outfile, protocol=pickle.HIGHEST_PROTOCOL)
-                outfile.close()
-                self.level_0_pages[i].clear()
-
-    def compact_level_0(self, level_0_file, order):
-        col_file_no = math.floor(order / 2)
-        if path.exists(self.fileroot + '/level_2_' + str(4 * col_file_no) + '.pickle'):
-            with open(self.fileroot + '/level_2_' + str(4 * col_file_no) + '.pickle', 'rb') as infile:
-                self.level_2_pages[0] = pickle.load(infile)
-            infile.close()
-        if path.exists(self.fileroot + '/level_2_' + str(4 * col_file_no+1) + '.pickle'):
-            with open(self.fileroot + '/level_2_' + str(4 * col_file_no+1) + '.pickle', 'rb') as infile:
-                self.level_2_pages[1] = pickle.load(infile)
-            infile.close()
-        if path.exists(self.fileroot + '/level_2_' + str(4 * col_file_no+2) + '.pickle'):
-            with open(self.fileroot + '/level_2_' + str(4 * col_file_no+2) + '.pickle', 'rb') as infile:
-                self.level_2_pages[2] = pickle.load(infile)
-            infile.close()
-        if path.exists(self.fileroot + '/level_2_' + str(4 * col_file_no+3) + '.pickle'):
-            with open(self.fileroot + '/level_2_' + str(4 * col_file_no+3) + '.pickle', 'rb') as infile:
-                self.level_2_pages[3] = pickle.load(infile)
-            infile.close()
-
-        files_1_read = [False]*self.PAGE_GROWING_RATE
-        for key in level_0_file:
-            file_no = math.floor(key/self.PAGE_SIZE)
-            if not files_1_read[file_no]:
-                if path.exists(self.fileroot+'/level_1_'+str(self.level_1_page_key_range_name_map[file_no])+'.pickle'):
-                    with open(self.fileroot+'/level_1_'+str(self.level_1_page_key_range_name_map[file_no])+'.pickle', 'rb') as infile:
-                        self.level_1_pages[file_no] = pickle.load(infile)
-                    infile.close()
-                files_1_read[file_no] = True
-            self.level_1_pages[file_no][key] = level_0_file[key]
-
-            self.level_2_pages[0][key] = level_0_file[key].col1
-            self.level_2_pages[1][key] = level_0_file[key].col2
-            self.level_2_pages[2][key] = level_0_file[key].col3
-            self.level_2_pages[3][key] = level_0_file[key].col4
-
-        for i in range(self.PAGE_GROWING_RATE):
-            if self.level_1_pages[i]:
-                if path.exists(self.fileroot+'/level_1_'+str(self.level_1_page_key_range_name_map[2*order+i])+'.pickle'):
-                    os.rename(self.fileroot+'/level_1_'+str(self.level_1_page_key_range_name_map[2*order+i])+'.pickle',
-                              self.fileroot+'/level_1_' + str(self.level_1_page_key_range_name_map[2*order+i])+'.pickle.bak')
-                with open(self.fileroot+'/level_1_'+str(self.level_1_page_key_range_name_map[2*order+i])+'.pickle', 'wb') as outfile:
-                    pickle.dump(self.level_1_pages[i], outfile, protocol=pickle.HIGHEST_PROTOCOL)
-                outfile.close()
-                self.level_1_pages[i].clear()
-
-        key_capacity_per_page = math.floor((self.max_key - self.min_key + 1)/math.pow(self.PAGE_GROWING_RATE, 2))
-
-        for i in range(4):
-            if path.exists(self.fileroot + '/level_2_' + self.level_2_col_name_map[i] + '_' +
-                           str(key_capacity_per_page*self.NUM_OF_COLS*col_file_no+1) + '-' +
-                           str(key_capacity_per_page*self.NUM_OF_COLS*(col_file_no+1)) + '.pickle'):
-                os.rename(self.fileroot + '/level_2_' + self.level_2_col_name_map[i] + '_' +
-                          str(key_capacity_per_page*self.NUM_OF_COLS*col_file_no+1) + '-' +
-                          str(key_capacity_per_page*self.NUM_OF_COLS*(col_file_no+1)) + '.pickle',
-                          self.fileroot + '/level_2_' + self.level_2_col_name_map[i] + '_' +
-                          str(key_capacity_per_page*self.NUM_OF_COLS*col_file_no+1)
-                          + '-' + str(key_capacity_per_page*self.NUM_OF_COLS*(col_file_no+1)) + '.pickle.bak')
-
-            with open(self.fileroot+'/level_2_'+ self.level_2_col_name_map[i] + '_' +
-                      str(key_capacity_per_page*self.NUM_OF_COLS*col_file_no+1) + '-' +
-                      str(key_capacity_per_page*self.NUM_OF_COLS*(col_file_no+1)) + '.pickle', 'wb') as outfile:
-                pickle.dump(self.level_2_pages[i], outfile, protocol=pickle.HIGHEST_PROTOCOL)
-            outfile.close()
-            self.level_2_pages[i].clear()
-'''

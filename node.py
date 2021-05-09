@@ -3,11 +3,23 @@ import os
 import pickle
 from bloomfilter import BloomFilter
 
+'''
+ File Naming Convention: 
+ ** The entire path starting from level 0 is specified in the name **
+ - Between levels a "/" is used to connect them, so a parent level is corresponding to a parent directory in file 
+   system.
+ - Within each level it takes the format of "level-<i>-<k>-<c>", where i indicates it's the i-th level, p is the 
+   kth key-range piece within this level, and c is the cth column group within the kth key-range piece.
+   
+   Example: level-0-1-1/level-1-3-1/level-2-2-2/data.log,
+            level-0-1-1/level-1-3-1/data.log
+            level-0-1-1/data.log
+'''
+
 
 class Node:
-    def __init__(self, key_low_bound, key_high_bound, columns,
-                 total_levels, storage_capacity, level, group,
-                 position, fan_out, file_root, fp_prob):
+    def __init__(self, key_low_bound, key_high_bound, total_levels, storage_capacity,
+                 level, group, position, fan_out, file_root, fp_prob):
         # root directory of where the file for this lsmtree node
         self.file_root = file_root
 
@@ -16,9 +28,6 @@ class Node:
 
         # the high bound (inclusive) of key range
         self.key_high_bound = key_high_bound
-
-        # total number of columns
-        self.num_columns = columns
 
         # total number of levels (this is to know if you are the last level)
         self.total_levels = total_levels
@@ -58,7 +67,7 @@ class Node:
         children = []
         for ch in range(self.fan_out):
             child_range_end = child_range_start + child_key_cap - 1
-            chnode = Node(child_range_start, child_range_end, self.num_columns, self.total_levels,
+            chnode = Node(child_range_start, child_range_end, self.total_levels,
                           self.storage_capacity, self.level+1, math.ceil((ch+1) / 2),
                           (col_position_in_group % 2) + 1, self.fan_out, self.file_root, fp_prob)
             children.append(chnode)
