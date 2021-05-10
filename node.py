@@ -14,12 +14,27 @@ from bloomfilter import BloomFilter
    Example: level-0-1-1/level-1-3-1/level-2-2-2/data.log,
             level-0-1-1/level-1-3-1/data.log
             level-0-1-1/data.log
+            
+        
+        C:.
+        |----level-0-1-1
+        |       |__data.log
+        |       |__level-1-1-1
+        |       |       |__data.log
+        |       |       |__level-2-1-1
+        |       |       |       |__data.log
+        |       |       |__level-2-1-2
+        |       |       |       |__data.log
+        |       |__level-1-1-2
+        |       |__level-1-2-1
+        |----level-0-2-1
+                                               
 '''
 
 
 class Node:
     def __init__(self, key_low_bound, key_high_bound, total_levels, storage_capacity,
-                 level, group, position, fan_out, file_root, fp_prob):
+                 level, child_order, position, fan_out, file_root, fp_prob):
         # root directory of where the file for this lsmtree node
         self.file_root = file_root
 
@@ -38,8 +53,8 @@ class Node:
         # the horizontal level of the lsmtree the node is on
         self.level = level
 
-        # the column group in the level this node is in
-        self.group = group
+        # the child order among children of its parent
+        self.child_order = child_order
 
         # the position inside a column group this node is in
         self.col_position = position
@@ -148,37 +163,12 @@ class Node:
         except ValueError:
             print('Reading data ran into exception!')
 
-    def get_child_file_name(self, read_key, col_pos):
-        # actual fan-out has to take number of column groups into consideration
-        child_level = self.level + 1
-
-        # each node will have fan-out/2 groups in their kids
-        child_group_base = (self.group - 1) * self.fan_out / 2
-
-        # for any children, their key range is the parent's key range split into fan-out number
-        # of ways multiplied by 2. The "multiplying by 2" part is to compensate the fact that each
-        # level down the column group splits into 2 so the range has to only split by fan-out/2, not
-        # fan-out. The exception is from memory to level 0, where the column group in level 0 is 1,
-        # so in this case the key range will be split by fan-out.
-        my_key_range = (self.key_high_bound - self.key_low_bound + 1)
-        if self.level == -1:
-            child_key_range = math.ceil(my_key_range / self.fan_out)
-        else:
-            child_key_range = math.ceil(my_key_range / self.fan_out * 2)
-        child_group_addition = (read_key - self.key_low_bound) / child_key_range + 1
-        child_group = child_group_base + child_group_addition
-
-        col_group_size = self.num_columns / math.pow(2, self.level)
-        child_col_position = ((col_pos - 1) / col_group_size) % 2 + 1
-
-        return self.get_file_name(child_level, child_group, child_col_position)
-
     def get_file_name(self):
-        return self.file_root + '/level-' + str(self.level) + '_group-' + str(self.group) + \
+        return self.file_root + '/level-' + str(self.level) + '_group-' + str(self.child_order) + \
                '_position-' + str(self.col_position) + '.log'
 
 
 if __name__ == '__main__':
     n = Node(1, 10, 100, 0, 1, 1, 8, '/Users/hollycasaletto', 0.05)
     n.read('twitter', 100)
-    n.read('holly', 100)
+    n.read('happy', 100)
