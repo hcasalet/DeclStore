@@ -8,12 +8,13 @@ from bloomfilter import BloomFilter
  ** The entire path starting from level 0 is specified in the name **
  - Between levels a "/" is used to connect them, so a parent level is corresponding to a parent directory in file 
    system.
- - Within each level it takes the format of "level-<i>-<k>-<c>", where i indicates it's the i-th level, p is the 
-   kth key-range piece within this level, and c is the cth column group within the kth key-range piece.
+ - Within each level it takes the format of "lv-<i>.kr-<j>.cg-<k>", where i indicates it's the level of the LSM tree
+   the node is on, j is the order of the key range piece within its parent node's key range, and k is the order of the 
+   column group within the key range. 
    
-   Example: level-0-1-1/level-1-3-1/level-2-2-2/data.log,
-            level-0-1-1/level-1-3-1/data.log
-            level-0-1-1/data.log
+   Example: lv-0.kr-1.cg-1/lv-1.kr-3.cg-1/lv-2.kr-2.cg-2/data.log,
+            lv-0-1-1/lv-1.kr-3.cg-1/data.log
+            lv-0-1-1/data.log
 '''
 
 
