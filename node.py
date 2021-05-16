@@ -1,5 +1,6 @@
 import math
 import os
+from pathlib import Path
 import pickle
 from bloomfilter import BloomFilter
 
@@ -86,16 +87,17 @@ class Node:
         self.workspace = dict()
 
     def make_node_children(self, fp_prob):
-        child_key_cap = math.ceil((self.key_high_bound - self.key_low_bound + 1) / self.fan_out * 2)
+        child_key_cap = math.ceil((self.key_high_bound - self.key_low_bound + 1) / self.fan_out)
         child_range_start = self.key_low_bound
 
         col_position_in_group = 0
         children = []
         for ch in range(self.fan_out):
             child_range_end = child_range_start + child_key_cap - 1
+            filepath = self.file_root + '/lv-' + str(self.level+1) + '.kr-' + str(ch+1) + '.cg-1'
+            Path(filepath).mkdir(parents=True, exist_ok=True)
             chnode = Node(child_range_start, child_range_end, self.total_levels,
-                          self.storage_capacity, self.level+1, math.ceil((ch+1) / 2),
-                          (col_position_in_group % 2) + 1, self.fan_out, self.file_root, fp_prob)
+                          self.storage_capacity, self.level+1, ch+1, 1, self.fan_out, filepath, fp_prob)
             children.append(chnode)
             child_range_start = child_range_end + 1
 
@@ -121,7 +123,7 @@ class Node:
         if self.level >= self.total_levels - 1:
             return None
         else:
-            child_key_cap = math.ceil((self.key_high_bound - self.key_low_bound + 1) / self.fan_out * 2)
+            child_key_cap = math.ceil((self.key_high_bound - self.key_low_bound + 1) / self.fan_out)
             child = math.ceil((read_key - self.key_low_bound + 1) / child_key_cap) - 1
             if not self.children:
                 return None

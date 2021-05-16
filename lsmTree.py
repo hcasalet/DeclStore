@@ -1,6 +1,7 @@
 import math
 from membuf import MemBuf
 from node import Node
+from pathlib import Path
 
 '''
                                  ----- Design of the LSM Tree -----
@@ -64,8 +65,10 @@ class LsmTree:
         child_range_high_bound = child_cap
 
         for child in range(self.fan_out):
+            filepath = file_root + '/lv-0.kr-' + str(child + 1) + '.cg-1'
+            Path(filepath).mkdir(parents=True, exist_ok=True)
             node = Node(child_range_low_bound, child_range_high_bound, self.levels,
-                        self.node_storage_capacity, 0, child + 1, 1, self.fan_out, file_root, fp_prob)
+                        self.node_storage_capacity, 0, child + 1, 1, self.fan_out, filepath, fp_prob)
             children.append(node)
             child_range_low_bound = child_range_high_bound + 1
             child_range_high_bound = child_range_low_bound + child_cap - 1
