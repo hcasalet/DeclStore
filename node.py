@@ -106,7 +106,7 @@ class Node:
     # Read the value of a key
     def read(self, read_key, col_pos):
         # What is the filename for myself
-        filename = self.get_file_name()
+        filename = self.file_root + '/data.log'
         if not os.path.exists(filename):
             return None
 
@@ -177,8 +177,7 @@ class Node:
             print('Reading data ran into exception!')
 
     def get_file_name(self):
-        return self.file_root + '/level-' + str(self.level) + '_group-' + str(self.child_order) + \
-               '_position-' + str(self.col_position) + '.log'
+        return self.file_root + '/data.log'
 
 
 if __name__ == '__main__':
