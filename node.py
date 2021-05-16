@@ -128,7 +128,7 @@ class Node:
             if not self.children:
                 return None
             else:
-                self.children[child].read(read_key, col_pos)
+                return self.children[child].read(read_key, col_pos)
 
     # Read the bloom filter and the key/value pairs into memory for compaction
     def read_whole_file(self):
