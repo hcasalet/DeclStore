@@ -4,7 +4,7 @@ import pickle
 from bloomfilter import BloomFilter
 
 '''
- File Naming Convention: 
+ $$$$ File Naming Convention: 
  ** The entire path starting from level 0 is specified in the name **
  - Between levels a "/" is used to connect them, so a parent level is corresponding to a parent directory in file 
    system.
@@ -28,7 +28,18 @@ from bloomfilter import BloomFilter
         |       |__lv-1.kr-1.cg-2
         |       |__lv-1.kr-2.cg-1
         |----lv-0.kr-2.cg-1
-                                               
+            
+ $$$$ File content:
+  - bloom filter. Bloom filter will only be added when a key is written into a file, and will never be cleared even 
+    when the data get compacted into the nodes in the levels below. When a key is deleted, the bits indicating 
+    the existence of the key also won't be reset back to zero. Therefore, as more keys have been deleted, the bloom 
+    filter false positive rate will likely increase. When the FP rate is higher than certain rate, we will trigger 
+    a rebuild of bloom filter.
+  - Children nodes column groups meta data. This records for every child key range (the concatenation of all children's
+    distinct key ranges will make up the parent's key range) their column group information, ie, which columns a 
+    particular child holds data for.
+  - the actual data
+                   
 '''
 
 
