@@ -106,7 +106,7 @@ class Node:
     # Read the value of a key
     def read(self, read_key, col_pos):
         # What is the filename for myself
-        filename = self.file_root + '/data.log'
+        filename = self.get_file_name()
         if not os.path.exists(filename):
             return None
 
@@ -161,20 +161,31 @@ class Node:
         for child in self.children:
             child.read_whole_file()
 
-        child_key_cap = math.ceil((self.key_high_bound - self.key_low_bound + 1) / self.fan_out * 2)
+        child_key_cap = math.ceil((self.key_high_bound - self.key_low_bound + 1) / self.fan_out)
         for key in self.workspace:
             kiddo = math.ceil((key - self.key_low_bound + 1) / child_key_cap) - 1
-            self.children
+            if key not in self.children[kiddo].workspace:
+                self.children[kiddo].bloom_ftr.add(str(key))
+            self.children[kiddo].workspace[key] = self.workspace[key]
+
+            if len(self.children[kiddo].workspace) >= self.children[kiddo].storage_capacity:
+                self.children[kiddo].compaction_f2f()
+
+        # compact is done so clear myself
+        self.workspace.clear()
+        for child in self.children:
+            child.write_to_file()
 
     @classmethod
     def read_data(cls, filename, bf_length, read_key):
         with open(filename, "rb") as infile:
             indata = infile.read()
         obj_data = pickle.loads(indata[bf_length:])
-        try:
+
+        if obj_data and obj_data[read_key]:
             return obj_data[read_key]
-        except ValueError:
-            print('Reading data ran into exception!')
+        else:
+            return None
 
     def get_file_name(self):
         return self.file_root + '/data.log'
