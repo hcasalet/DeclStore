@@ -107,11 +107,6 @@ class Node:
 
         return children
 
-    def init_column_group(self):
-        if self.level == self.total_levels - 2:
-            for child in range(self.fan_out):
-                self.children_column_group_map[child+1] = [(self.key_low_bound, self.key_high_bound)]
-
     # Read the value of a key
     def read(self, rkeyLow, rkeyHigh, col_pos):
         # What is the filename for myself
