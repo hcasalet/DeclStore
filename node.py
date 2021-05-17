@@ -161,7 +161,6 @@ class Node:
         cgmap_with_len = cgmap_len_bytes + cgmap_bytes
 
         obj_data_bytes = pickle.dumps(self.workspace)
-        #data_to_write = bf_bytes + obj_data_bytes
         data_to_write = bf_bytes + cgmap_with_len + obj_data_bytes
 
         with open(self.get_file_name(), "wb") as outfile:
