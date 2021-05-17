@@ -84,7 +84,7 @@ class Node:
         self.bloom_ftr = BloomFilter((self.key_high_bound - self.key_low_bound + 1), fp_prob)
 
         # children column group map
-        self.column_group_map = dict()
+        self.children_column_group_map = dict()
 
         # the workspace in memory when data is read in from the file during compaction
         self.workspace = dict()
@@ -105,6 +105,11 @@ class Node:
             child_range_start = child_range_end + 1
 
         return children
+
+    def init_column_group(self):
+        if self.level == self.total_levels - 2:
+            for child in range(self.fan_out):
+                self.children_column_group_map[child+1] = [(self.key_low_bound, self.key_high_bound)]
 
     # Read the value of a key
     def read(self, read_key, col_pos):

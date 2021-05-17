@@ -78,6 +78,6 @@ class LsmTree:
     def read(self, read_key, col_pos):
         return self.root.read(read_key, col_pos)
 
+    # ToDo: trigger bloom filter rebuild when FP rate creeps up
     def write(self, write_key, write_value):
         self.root.write(write_key, write_value)
-
