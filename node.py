@@ -122,21 +122,22 @@ class Node:
         bf, bf_length = BloomFilter.read_bloom_filter_from_file(filename)
 
         # bloom filter shows the item is possibly in, so lets getting it
-        if bf.check(str(rkeyLow)):
+        if not bf.check(str(rkeyLow)):
+            return None
+        else:
             obj = self.read_data(filename, bf_length, rkeyLow)
             if obj is not None:
                 return obj
-
-        # bloom filter was false positive, continue to search children
-        if self.level >= self.total_levels - 1:
-            return None
-        else:
-            child_key_cap = math.ceil((self.key_high_bound - self.key_low_bound + 1) / self.fan_out)
-            child = math.ceil((rkeyLow - self.key_low_bound + 1) / child_key_cap) - 1
-            if not self.children:
-                return None
-            else:
-                return self.children[child].read(rkeyLow, rkeyHigh, col_pos)
+            else:  # bloom filter was false positive, continue to search children
+                if self.level >= self.total_levels - 1:
+                    return None
+                else:
+                    child_key_cap = math.ceil((self.key_high_bound - self.key_low_bound + 1) / self.fan_out)
+                    child = math.ceil((rkeyLow - self.key_low_bound + 1) / child_key_cap) - 1
+                    if not self.children:
+                        return None
+                    else:
+                        return self.children[child].read(rkeyLow, rkeyHigh, col_pos)
 
     # Read the bloom filter and the key/value pairs into memory for compaction
     def read_whole_file(self):
@@ -151,8 +152,15 @@ class Node:
     # write the content of the node to a file
     def write_to_file(self):
         bf_bytes = self.bloom_ftr.prepare_bloom_filter_to_write()
+
+        #cgmap_bytes = pickle.dumps(self.children_column_group_map)
+        #cgmap_length = len(cgmap_bytes)
+        #cgmap_len_bytes = cgmap_length.to_bytes(4, 'big')
+        #cgmap_with_len = cgmap_len_bytes + cgmap_bytes
+
         obj_data_bytes = pickle.dumps(self.workspace)
         data_to_write = bf_bytes + obj_data_bytes
+        #data_to_write = bf_bytes + cgmap_with_len + obj_data_bytes
 
         with open(self.get_file_name(), "wb") as outfile:
             outfile.write(data_to_write)
