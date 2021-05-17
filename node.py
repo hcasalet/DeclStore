@@ -46,7 +46,7 @@ from bloomfilter import BloomFilter
 
 class Node:
     def __init__(self, key_low_bound, key_high_bound, total_levels, storage_capacity,
-                 level, child_order, position, fan_out, file_root, fp_prob):
+                 level, key_range_order, column_group, fan_out, file_root, fp_prob):
         # root directory of where the file for this lsmtree node
         self.file_root = file_root
 
@@ -66,10 +66,10 @@ class Node:
         self.level = level
 
         # the child order among children of its parent
-        self.child_order = child_order
+        self.key_range_order = key_range_order
 
         # the position inside a column group this node is in
-        self.col_position = position
+        self.column_group = column_group
 
         # number of children
         self.fan_out = fan_out
@@ -82,6 +82,9 @@ class Node:
 
         # the bloom filter for the keys stored in this node
         self.bloom_ftr = BloomFilter((self.key_high_bound - self.key_low_bound + 1), fp_prob)
+
+        # children column group map
+        self.column_group_map = dict()
 
         # the workspace in memory when data is read in from the file during compaction
         self.workspace = dict()
