@@ -3,6 +3,7 @@ import os
 from pathlib import Path
 import pickle
 from bloomfilter import BloomFilter
+from columngroup import ColumnGroup
 
 '''
  $$$$ File Naming Convention: 
@@ -84,7 +85,7 @@ class Node:
         self.bloom_ftr = BloomFilter((self.key_high_bound - self.key_low_bound + 1), fp_prob)
 
         # children column group map
-        self.children_column_group_map = dict()
+        self.children_cg_metadata = ColumnGroup(self.fan_out)
 
         # the workspace in memory when data is read in from the file during compaction
         self.workspace = dict()
@@ -148,20 +149,16 @@ class Node:
             length = int.from_bytes(alldata[:4], 'big')
             self.bloom_ftr = pickle.loads(alldata[4:(4+length)])
             cg_map_len = int.from_bytes(alldata[(4+length):(8+length)], 'big')
-            self.children_column_group_map = pickle.loads(alldata[(8+length):(8+length+cg_map_len)])
+            self.children_cg_metadata = pickle.loads(alldata[(8+length):(8+length+cg_map_len)])
             self.workspace = pickle.loads(alldata[(8+length+cg_map_len):])
 
     # write the content of the node to a file
     def write_to_file(self):
         bf_bytes = self.bloom_ftr.prepare_bloom_filter_to_write()
-
-        cgmap_bytes = pickle.dumps(self.children_column_group_map)
-        cgmap_length = len(cgmap_bytes)
-        cgmap_len_bytes = cgmap_length.to_bytes(4, 'big')
-        cgmap_with_len = cgmap_len_bytes + cgmap_bytes
-
+        cg_bytes = self.children_cg_metadata.prepare_column_group_map_to_write()
         obj_data_bytes = pickle.dumps(self.workspace)
-        data_to_write = bf_bytes + cgmap_with_len + obj_data_bytes
+
+        data_to_write = bf_bytes + cg_bytes + obj_data_bytes
 
         with open(self.get_file_name(), "wb") as outfile:
             outfile.write(data_to_write)
@@ -198,8 +195,7 @@ class Node:
         with open(filename, "rb") as infile:
             indata = infile.read()
 
-        cgmap_len = int.from_bytes(indata[start_length:(start_length+4)], 'big')
-        cgmap = pickle.loads(indata[(start_length+4):(start_length+4+cgmap_len)])
+        cgmap, cgmap_len = ColumnGroup.get_column_groups_from_file(indata, start_length)
         obj_data = pickle.loads(indata[(start_length+4+cgmap_len):])
 
         if obj_data and obj_data[read_key]:
