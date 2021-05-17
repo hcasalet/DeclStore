@@ -75,8 +75,8 @@ class LsmTree:
 
         return MemBuf(self.node_storage_capacity, math.ceil(items/self.fan_out), children)
 
-    def read(self, read_key, col_pos):
-        return self.root.read(read_key, col_pos)
+    def read(self, rkeyLow, rkeyHigh, col_pos):
+        return self.root.read(rkeyLow, rkeyHigh, col_pos)
 
     # ToDo: trigger bloom filter rebuild when FP rate creeps up
     def write(self, write_key, write_value):

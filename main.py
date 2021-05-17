@@ -32,11 +32,11 @@ def writes():
 
 
 def reads():
-    print_value(25, lsm.read(25, 0))
-    print_value(66, lsm.read(66, 0))
-    print_value(96, lsm.read(96, 0))
-    print_value(15, lsm.read(15, 0))
-    print_value(28, lsm.read(28, 0))
+    print_value(25, lsm.read(25, 25, 0))
+    print_value(66, lsm.read(66, 66, 0))
+    print_value(96, lsm.read(96, 96, 0))
+    print_value(15, lsm.read(15, 15, 0))
+    print_value(28, lsm.read(28, 28, 0))
 
 
 # Press the green button in the gutter to run the script.

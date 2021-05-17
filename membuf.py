@@ -10,13 +10,14 @@ class MemBuf:
         self.child_key_cap = level_0_cap
         self.children = children
 
-    def read(self, rkey, col_pos):
-        if rkey in self.buffer:
-            return self.buffer[rkey]
+    def read(self, rkeyLow, rkeyHigh, col_pos):
+        if rkeyLow == rkeyHigh and rkeyLow in self.buffer:
+            return self.buffer[rkeyLow]
 
         # The following formula figures out which child search should go to
-        child = math.ceil(rkey/self.child_key_cap) - 1
-        return self.children[child].read(rkey, col_pos)
+        childLow = math.ceil(rkeyLow/self.child_key_cap) - 1
+        childHigh = math.ceil(rkeyHigh/self.child_key_cap) - 1
+        return self.children[childLow].read(rkeyLow, rkeyLow, col_pos)
 
     def write(self, wkey, wvalue):
         self.buffer[wkey] = wvalue

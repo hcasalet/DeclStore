@@ -112,7 +112,7 @@ class Node:
                 self.children_column_group_map[child+1] = [(self.key_low_bound, self.key_high_bound)]
 
     # Read the value of a key
-    def read(self, read_key, col_pos):
+    def read(self, rkeyLow, rkeyHigh, col_pos):
         # What is the filename for myself
         filename = self.get_file_name()
         if not os.path.exists(filename):
@@ -122,8 +122,8 @@ class Node:
         bf, bf_length = BloomFilter.read_bloom_filter_from_file(filename)
 
         # bloom filter shows the item is possibly in, so lets getting it
-        if bf.check(str(read_key)):
-            obj = self.read_data(filename, bf_length, read_key)
+        if bf.check(str(rkeyLow)):
+            obj = self.read_data(filename, bf_length, rkeyLow)
             if obj is not None:
                 return obj
 
@@ -132,11 +132,11 @@ class Node:
             return None
         else:
             child_key_cap = math.ceil((self.key_high_bound - self.key_low_bound + 1) / self.fan_out)
-            child = math.ceil((read_key - self.key_low_bound + 1) / child_key_cap) - 1
+            child = math.ceil((rkeyLow - self.key_low_bound + 1) / child_key_cap) - 1
             if not self.children:
                 return None
             else:
-                return self.children[child].read(read_key, col_pos)
+                return self.children[child].read(rkeyLow, rkeyHigh, col_pos)
 
     # Read the bloom filter and the key/value pairs into memory for compaction
     def read_whole_file(self):
